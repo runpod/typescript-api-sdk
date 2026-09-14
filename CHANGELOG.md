@@ -1,5 +1,11 @@
 # @runpod/typescript-api-sdk
 
+## 0.1.1
+
+### Patch Changes
+
+- Update the README installation instructions now that the SDK is available on npm.
+
 ## 0.1.0
 
 ### Minor Changes
