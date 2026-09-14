@@ -36,7 +36,24 @@ npx @runpod/mcp-server@latest add
 
 These alternatives let an agent manage Runpod without integrating this SDK.
 
-## Get started with the SDK
+## Install from npm
+
+Once the first release is published, install the SDK in your app:
+
+```bash
+npm install @runpod/typescript-api-sdk
+```
+
+Or with pnpm:
+
+```bash
+pnpm add @runpod/typescript-api-sdk
+```
+
+Then [create a client with your API key](#use-it-in-your-app). Node.js 20+ is
+required; Python and the source build tools are not needed to use the npm package.
+
+## Build from source
 
 To build from source, install **Node.js 24** and **pnpm 11**. Python is only needed
 when regenerating types or running the spec tests.
@@ -55,7 +72,7 @@ Set `RUNPOD_API_KEY` in `.env`, then run a read-only request to list GPU types:
 node --env-file=.env examples/catalog.mjs
 ```
 
-## Use it in your app
+### Install a local build
 
 Create a local package from the SDK checkout:
 
@@ -70,12 +87,15 @@ by `npm pack`:
 npm install /path/to/package.tgz
 ```
 
-Set `RUNPOD_API_KEY` in your app's environment and make a request:
+## Use it in your app
+
+After installing from npm or a local build, pass your API key when creating a
+client and make a request:
 
 ```ts
 import { createRunpodClient } from "@runpod/typescript-api-sdk";
 
-const client = createRunpodClient();
+const client = createRunpodClient({ apiKey: "YOUR_API_KEY" });
 const { data, response } = await client.GET("/v2/catalog/gpus", {
   signal: AbortSignal.timeout(15_000),
 });
@@ -85,12 +105,38 @@ if (!data) throw new Error("Runpod returned no data");
 console.log(data.gpus);
 ```
 
-The client uses `RUNPOD_API_KEY`, or accepts `{ apiKey: "..." }`. It retries
-transient failures by default; pass `{ retry: false }` to disable retries.
+The client retries transient failures by default; pass `{ retry: false }` to disable retries.
 Use `response.ok` to check HTTP status. Network, timeout, and parsing failures
 reject the promise. A **30-second deadline** covers retries and response-body
 consumption; configure `timeoutMs` or set it to `false` for long-lived streams.
 The SDK does not load `.env` automatically. Keep API keys in server-side code.
+
+## One API key per client
+
+Each call to `createRunpodClient` creates an independent client. Pass `apiKey`
+to configure credentials for that instance; requests send it as
+`Authorization: Bearer <apiKey>`.
+
+```ts
+import { createRunpodClient } from "@runpod/typescript-api-sdk";
+
+const clientA = createRunpodClient({ apiKey: "YOUR_FIRST_API_KEY" });
+const clientB = createRunpodClient({ apiKey: "YOUR_SECOND_API_KEY" });
+
+const podsA = await clientA.GET("/v2/pods"); // Uses the first key
+const podsB = await clientB.GET("/v2/pods"); // Uses the second key
+```
+
+Create as many clients as you need. Each keeps its own credentials and options;
+creating another client does not change existing clients. Load real keys from
+server-side configuration or a secret store rather than committing them to code.
+
+If you omit `apiKey`, the client reads `RUNPOD_API_KEY` from the environment when
+it is created. An explicit `apiKey` takes precedence. For example:
+
+```ts
+const client = createRunpodClient(); // Uses RUNPOD_API_KEY
+```
 
 ## More
 
