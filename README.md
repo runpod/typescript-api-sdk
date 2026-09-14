@@ -88,12 +88,14 @@ console.log(data.gpus);
 The client uses `RUNPOD_API_KEY`, or accepts `{ apiKey: "..." }`. It retries
 transient failures by default; pass `{ retry: false }` to disable retries.
 Use `response.ok` to check HTTP status. Network, timeout, and parsing failures
-reject the promise. The SDK does not load `.env` automatically or set a default
-timeout. Keep API keys in server-side code.
+reject the promise. A **30-second deadline** covers retries and response-body
+consumption; configure `timeoutMs` or set it to `false` for long-lived streams.
+The SDK does not load `.env` automatically. Keep API keys in server-side code.
 
 ## More
 
 - [Client guide](docs/client.md): options, errors, retries, CommonJS, and log streams.
+- [Logging guide](docs/logging.md): structured events, cancellation, and parser limits.
 - [Examples](examples): runnable catalog and pod-log requests.
 - [Development](docs/development.md): tests, type generation, and spec-update automation.
 

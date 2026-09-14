@@ -110,7 +110,7 @@ describe("createRetryFetch", () => {
     }
   });
 
-  it("clamps Retry-After to maxRetryAfterMs", async () => {
+  it("returns the response when Retry-After exceeds the wait ceiling", async () => {
     const server = countingFetch((n) =>
       n === 1
         ? new Response("slow down", { status: 429, headers: { "Retry-After": "3600" } })
@@ -118,8 +118,10 @@ describe("createRetryFetch", () => {
     );
     const { impl, delays } = recordingRetry(server.impl, { maxRetryAfterMs: 250 });
     const response = await impl("https://example.test/v2/pods");
-    expect(response.status).toBe(200);
-    expect(delays).toEqual([250]);
+    expect(response.status).toBe(429);
+    expect(delays).toEqual([]);
+    expect(server.calls()).toBe(1);
+    await response.body?.cancel();
   });
 
   it("backs off exponentially up to maxBackoffMs, with equal jitter", async () => {

@@ -20,6 +20,6 @@ test("documented read-only examples execute against mocked responses", () => {
       cwd: root, env: { ...process.env, RUNPOD_API_KEY: "mock", RUNPOD_API_BASE_URL: "https://example.test" }, encoding: "utf8",
     });
     assert.match(run("examples/catalog.mjs"), /0 GPU types/);
-    assert.match(run("examples/pod-logs.mjs", ["example-pod"]), /data: example log/);
+    assert.match(run("examples/pod-logs.mjs", ["example-pod"]), /^example log\n$/);
   } finally { rmSync(temporary, { recursive: true, force: true }); }
 });

@@ -1,3 +1,6 @@
+import { getRateLimitInfo } from "./rate-limit.js";
+export { parseRetryAfter } from "./rate-limit.js";
+
 // Shared retry policy for every RunPod API call, as a fetch wrapper.
 //
 // Policy: idempotent requests (GET, HEAD, PUT, DELETE, OPTIONS) retry on 429,
@@ -5,7 +8,7 @@
 // PATCH) retry ONLY on 429 — a 5xx may mean the API already performed the
 // mutation, and a blind replay can double-create. A Retry-After header
 // (delay-seconds or HTTP-date, RFC 9110 §10.2.3) is respected up to
-// maxRetryAfterMs; otherwise delay is exponential backoff with equal jitter.
+// the wait ceiling; longer waits return the response instead of retrying early. Otherwise delay is exponential backoff with equal jitter.
 // An aborted request is never retried: the caller's deadline is the ceiling.
 
 export interface RetryOptions {
@@ -40,15 +43,6 @@ const RETRYABLE_STATUS = new Set([500, 502, 503, 504]);
 function isAbortError(error: unknown): boolean {
   const name = (error as { name?: unknown } | null | undefined)?.name;
   return name === "AbortError" || name === "TimeoutError";
-}
-
-export function parseRetryAfter(header: string | null): number | undefined {
-  if (!header) return undefined;
-  const trimmed = header.trim();
-  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1_000;
-  const date = Date.parse(trimmed);
-  if (!Number.isNaN(date)) return Math.max(date - Date.now(), 0);
-  return undefined;
 }
 
 function shouldRetry(method: string, response: Response | undefined): boolean {
@@ -127,10 +121,11 @@ export function createRetryFetch(options: RetryOptions = {}): typeof fetch {
         throw networkError;
       }
 
-      let delay = parseRetryAfter(response?.headers.get("Retry-After") ?? null);
-      if (delay !== undefined) {
-        delay = Math.min(delay, maxRetryAfterMs);
-      } else {
+      const rateLimit = response ? getRateLimitInfo(response.headers) : undefined;
+      let delay = rateLimit?.retryDelayMs;
+      // A wait ceiling is not permission to retry sooner than the server allows.
+      if (response && (rateLimit?.incomplete || (delay !== undefined && delay > maxRetryAfterMs))) return response;
+      if (delay === undefined) {
         const shift = Math.min(attempt - 1, 20);
         const backoff = Math.min(minBackoffMs * 2 ** shift, maxBackoffMs);
         // Equal jitter over [backoff/2, backoff].

@@ -39,7 +39,12 @@ Per-request openapi-fetch options, including `signal` and `parseAs`, remain avai
 ## Retries and timeouts
 
 Defaults: four total attempts, exponential backoff with equal jitter from a
-1-second base to a 30-second maximum, and `Retry-After` capped at 60 seconds.
+1-second base to a 30-second maximum. The maximum automatic server-directed
+wait is 60 seconds (`maxRetryAfterMs`). Longer waits return the HTTP response
+without retrying; they are never shortened into premature retries.
+`getRateLimitInfo(response.headers)` exposes quota windows, the longest known
+wait, and whether the metadata is incomplete. Both `Retry-After` and exhausted
+`RateLimit` windows are considered. Incomplete metadata prevents automatic retries.
 429 responses retry for all methods. Network failures and 500/502/503/504 retry
 only for GET, HEAD, PUT, DELETE, and OPTIONS. POST and PATCH do not retry those
 failures, because the mutation may already have happened.
@@ -49,11 +54,17 @@ Pass `retry: { maxAttempts, minBackoffMs, maxBackoffMs, maxRetryAfterMs }`, or
 nonnegative, at most 2,147,483,647 milliseconds, and minimum backoff must not
 exceed maximum backoff.
 
-There is no default total timeout. Pass `signal: AbortSignal.timeout(...)` to
-bound the request and retry waits. Cancellation interrupts a pending backoff
-immediately and preserves the caller's abort reason. Injected fetch implementations
-must honor the signal during their own network work. An injected sleep cannot
-be stopped internally, but the client stops waiting for it on cancellation.
+The default whole-operation deadline is **30 seconds**. Configure it with
+`createRunpodClient({ timeoutMs: 15_000 })`, or use `timeoutMs: false` to disable
+the SDK timer. A caller-provided `signal` can cancel earlier. The same budget
+covers all retry attempts, sleeps, headers, and response-body consumption.
+Cancellation preserves the caller's reason; the SDK deadline raises `TimeoutError`.
+Even an injected fetch/body that ignores cancellation cannot keep the caller
+waiting past the deadline, though underlying custom work may continue.
+
+For a long-lived log stream, choose a suitable deadline or disable the SDK timer
+and supply your own abort signal. Always consume or cancel returned streams so
+resources are released.
 
 ## Logs and runnable examples
 
@@ -67,9 +78,11 @@ node --env-file=.env examples/pod-logs.mjs YOUR_POD_ID
 The `--env-file` flag requires Node 20.6 or newer; on earlier Node 20 versions,
 export the variables in your shell. The SDK itself does not load `.env` files.
 
-Pod and worker log endpoints return SSE. Use `parseAs: "stream"` to read their
-response body, as demonstrated in [examples/pod-logs.mjs](../examples/pod-logs.mjs).
-The example prints raw SSE and stops after 30 seconds via cancellation. A stream
-chunk is not necessarily an SSE event; use an SSE parser if you need structured
-events. Failures after streaming begins are not automatically retried or resumed.
+Pod and worker log endpoints return Server-Sent Events (SSE). Request
+`parseAs: "stream"`, then pass the response body to `iterateLogEvents`.
+The [logging guide](logging.md) has a complete example and describes the event
+format, cancellation, and limits. The runnable pod-log example prints decoded
+log lines and stops after 30 seconds.
 
+The SDK does not print diagnostic logs or configure a logging framework. Your
+application decides where to send the events returned by the iterator.

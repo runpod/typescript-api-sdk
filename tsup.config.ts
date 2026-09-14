@@ -8,5 +8,5 @@ export default defineConfig({
   target: "node20",
   // openapi-fetch's CJS default export cannot be called through tsup's
   // external default-import shim. Bundle its implementation for both formats.
-  noExternal: ["openapi-fetch"],
+  noExternal: ["openapi-fetch", "structured-headers"],
 });

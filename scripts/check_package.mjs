@@ -23,6 +23,12 @@ try {
   const runtime = `
 const assert = require("node:assert/strict");
 async function verify(createRunpodClient) {
+  const { iterateLogEvents, getRateLimitInfo, createDeadlineFetch } = require(${JSON.stringify(pkg.name)});
+  assert.equal(typeof createDeadlineFetch, "function");
+  assert.equal(getRateLimitInfo(new Headers({ RateLimit: 'hour;r=0;t=3600' })).retryDelayMs, 3600000);
+  const events = [];
+  for await (const event of iterateLogEvents(new Response('data: {"line":"hello"}\\n\\n').body)) events.push(event);
+  assert.equal(events[0].data.line, "hello");
   let calls = 0;
   const client = createRunpodClient({ apiKey: "test-key", fetch: async (input) => {
     const request = new Request(input);
