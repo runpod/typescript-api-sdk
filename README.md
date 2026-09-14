@@ -38,7 +38,7 @@ These alternatives let an agent manage Runpod without integrating this SDK.
 
 ## Install from npm
 
-Once the first release is published, install the SDK in your app:
+Install the SDK in your app:
 
 ```bash
 npm install @runpod/typescript-api-sdk
