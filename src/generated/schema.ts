@@ -28,6 +28,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v2/account/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secrets
+         * @description Returns the account's secrets — encrypted strings referenced from pod, serverless, and template environment variables with the `{{ RUNPOD_SECRET_<name> }}` placeholder syntax, substituted with the secret's value when the pod or worker boots. Secret values are write-only and are never returned.
+         */
+        get: operations["listSecrets"];
+        put?: never;
+        /**
+         * Create a secret
+         * @description Stores a new account-scoped encrypted string. `name` must be unique
+         *     across the account's secrets and is immutable; `value` is write-only
+         *     and can never be read back through the API.
+         *
+         *     Use the secret from pods, serverless endpoints, and templates by
+         *     setting an environment variable's value to
+         *     `{{ RUNPOD_SECRET_<name> }}` — Runpod substitutes the stored value
+         *     when the pod or worker boots.
+         *
+         *     Returns `201` with the created secret's metadata, or `409` when the
+         *     name is already taken.
+         */
+        post: operations["createSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v2/account/secrets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Secret identifier
+                 * @example 2q9m7x4cavgd
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a secret
+         * @description Returns a single secret's metadata by ID. The value is write-only and never returned.
+         */
+        get: operations["getSecret"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a secret
+         * @description Permanently deletes a secret. Environment variables referencing the
+         *     deleted secret's name will no longer resolve to a value.
+         */
+        delete: operations["deleteSecret"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a secret
+         * @description Rotates a secret's value and/or updates its description. Only the
+         *     provided fields are changed and at least one field is required; the
+         *     `name` is immutable.
+         *
+         *     Pods and workers receive the new value at their next boot — running
+         *     instances keep the value they were started with.
+         *
+         *     When both fields are sent, the value is applied first, then the
+         *     description. The two updates are not atomic: if the description
+         *     update fails after the value was rotated, the response is an error
+         *     but the new value has already taken effect. Send the fields in
+         *     separate requests when that partial outcome matters.
+         */
+        patch: operations["updateSecret"];
+        trace?: never;
+    };
     "/v2/pods": {
         parameters: {
             query?: never;
@@ -40,6 +120,12 @@ export interface paths {
          * @description Returns pods owned by the authenticated user. Cluster member
          *     pods are excluded by default; set `includeClusterPods=true` to include
          *     them (each carries a non-null `cluster` membership block).
+         *
+         *     Results are cursor-paginated newest-first; an omitted `limit`
+         *     defaults to 1000. When cluster member pods are excluded, the
+         *     exclusion applies to each page after it is cut, so a page may hold
+         *     fewer than `limit` pods — follow `pagination.nextCursor` until
+         *     `hasNextPage` is false rather than counting items.
          */
         get: operations["listPods"];
         put?: never;
@@ -100,6 +186,15 @@ export interface paths {
          *     | `403` | Your account cannot access the requested pool. | Skip this candidate, keep going. |
          *     | `429` | Rate limited. | Back off using `Retry-After`, then resume. |
          *     | `5xx` | Transient upstream failure. | Retry the same candidate with backoff. |
+         *
+         *     Requests larger than 102400 bytes receive `413` before authentication
+         *     or processing. Reduce the serialized JSON request body and retry.
+         *
+         *     This limit also applies to the deployment request built from your input
+         *     and any referenced template. A small request can therefore receive `413`
+         *     if inherited template settings make the combined request too large.
+         *     Reduce environment variables or command values in your request or template
+         *     and retry.
          *
          *     `400` covers both "your request breaks a rule" and "no capacity",
          *     because capacity exhaustion currently carries no machine-readable code
@@ -342,7 +437,9 @@ export interface paths {
         };
         /**
          * List serverless endpoints
-         * @description Returns all serverless endpoints owned by the authenticated user.
+         * @description Returns serverless endpoints owned by the authenticated user,
+         *     cursor-paginated newest-first; an omitted `limit` defaults to 1000.
+         *     Follow `pagination.nextCursor` until `hasNextPage` is false.
          */
         get: operations["listEndpoints"];
         put?: never;
@@ -515,6 +612,10 @@ export interface paths {
          *     release is a versioned configuration snapshot with a `diff` of what
          *     changed; build-driven releases carry a `buildId` (fetch build detail via
          *     the builds sub-routes).
+         *
+         *     Releases are cursor-paginated newest-first; an omitted `limit`
+         *     defaults to 1000. The rollout summary always describes the endpoint's
+         *     current state, independent of the page requested.
          */
         get: operations["listEndpointReleases"];
         put?: never;
@@ -540,9 +641,10 @@ export interface paths {
         };
         /**
          * List serverless endpoint builds
-         * @description Returns the endpoint's GitHub build history, newest first (RunPod
-         *     GitHub-build integration). At most the 100 most recent builds are
-         *     returned; any older build can still be fetched by id via
+         * @description Returns the endpoint's GitHub build history, newest first (Runpod
+         *     GitHub-build integration), cursor-paginated; an omitted `limit`
+         *     defaults to 100, so a bare request returns at most the 100 most
+         *     recent builds. Any build can also be fetched by id via
          *     `GET /v2/serverless/{id}/builds/{buildId}`. Stream a build's logs via
          *     `/v2/serverless/{id}/builds/{buildId}/logs`.
          */
@@ -576,7 +678,7 @@ export interface paths {
         /**
          * Get a serverless endpoint build
          * @description Returns one of the endpoint's GitHub builds by id, regardless of age —
-         *     unlike the list, which is capped to recent history.
+         *     no need to page through `GET /v2/serverless/{id}/builds` to reach it.
          */
         get: operations["getEndpointBuild"];
         put?: never;
@@ -633,7 +735,10 @@ export interface paths {
         };
         /**
          * List templates
-         * @description Returns all templates owned by the authenticated user.
+         * @description Returns templates owned by the authenticated user (including
+         *     team/organization-scoped ones), cursor-paginated; an omitted `limit`
+         *     defaults to 1000. Follow `pagination.nextCursor` until `hasNextPage`
+         *     is false.
          */
         get: operations["listTemplates"];
         put?: never;
@@ -1009,7 +1114,9 @@ export interface paths {
          *     templates (public or private) are managed under `/v2/templates`; fetch
          *     any individual template — catalog or owned — via `/v2/templates/{id}`.
          *
-         *     At most 100 templates are returned. Pagination is not yet supported.
+         *     At most 100 templates are returned. Cursor pagination is not yet
+         *     supported here; `pagination` is always the exhausted marker
+         *     (`nextCursor: null`, `hasNextPage: false`).
          */
         get: operations["listPublicTemplates"];
         put?: never;
@@ -1069,7 +1176,7 @@ export interface paths {
         };
         /**
          * Get serverless billing history
-         * @description Returns serverless endpoint billing detail for the authenticated user, split into time buckets by startTime/endTime with bucketSize or by lastN recent buckets. Use serverlessId to filter to one endpoint; without it, records are emitted per serverless endpoint per bucket. Each record reports endpoint-level GPU, CPU, disk, platform fee, and total amounts. This is distinct from pod billing, which covers standalone GPU and CPU pod costs rather than serverless endpoint workloads.
+         * @description Returns serverless endpoint billing detail for the authenticated user, split into time buckets by startTime/endTime with bucketSize or by lastN recent buckets. Use serverlessId to filter to one endpoint; without it, records are emitted per serverless endpoint per bucket. Each record reports endpoint-level GPU, CPU, disk, and total amounts. This is distinct from pod billing, which covers standalone GPU and CPU pod costs rather than serverless endpoint workloads.
          */
         get: operations["listServerlessBilling"];
         put?: never;
@@ -1144,13 +1251,54 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description Container configuration universal to every containerized resource. Compose ContainerConfig instead unless the resource cannot support private registries (clusters, until the upstream input accepts a registry credential). */
+        /** @description Cursor-pagination metadata, uniform across list endpoints. Every response carries it: follow `nextCursor` while `hasNextPage` is true to walk the full result set. */
+        Pagination: {
+            /**
+             * @description Pass as the `cursor` query parameter to fetch the next page. Null on the last page.
+             * @example null
+             */
+            nextCursor: string | null;
+            /**
+             * @description Whether more items exist after this page.
+             * @example false
+             */
+            hasNextPage: boolean;
+        };
+        /** @description Mixin for cursor-paginated list responses. Compose it with `allOf` next to the resource's bare list schema so that a list shape shared with a non-paginated endpoint (e.g. a cluster's member pods) does not inherit a pagination block it cannot honour. */
+        Paginated: {
+            pagination: components["schemas"]["Pagination"];
+        };
+        /** @description Container configuration universal to every containerized resource. Compose ContainerConfig instead unless the resource cannot support a direct registry credential (clusters — there the registry credential arrives via a pod template, see CreateClusterRequest.templateId). */
         BaseContainerConfig: {
             /**
-             * @description Arguments passed to the container entrypoint
+             * @description The container's command, as a single raw string. This is the field `entrypoint` and `cmd` encode into, exposed in its stored form.
+             *
+             *     Two shapes are accepted. A bare shell string is treated as CMD and split into arguments, which is what the console's "Container start command" field writes. A JSON object of the form `{"entrypoint":[...],"cmd":[...]}` sets either or both explicitly.
+             *
+             *     Responses always return both representations: `args` exactly as stored, plus the deconstructed `entrypoint` and `cmd`. Supplying `args` together with `entrypoint` or `cmd` is allowed only when they describe the same command, so a read-modify-write client can send back everything it received. Send `""` to clear, omit to leave unchanged.
+             * @example --model meta-llama/Llama-3-8B --max-model-len 8192
+             * @example {"entrypoint":["/bin/bash","-c"],"cmd":["python -u main.py"]}
              * @example
              */
             args?: string;
+            /**
+             * @description Container CMD in exec form. When the image defines an ENTRYPOINT, this is the argument list passed to it. Encoded into the `args` field; supplying both is allowed only when they describe the same command. Send `[]` to clear, omit to leave unchanged.
+             * @example [
+             *       "--model",
+             *       "meta-llama/Llama-3-8B",
+             *       "--max-model-len",
+             *       "8192"
+             *     ]
+             */
+            cmd?: string[];
+            /**
+             * @description Container ENTRYPOINT in exec form, overriding the image's own. Encoded into `args` field; supplying both is allowed only when they describe the same command. Send `[]` to clear, omit to leave unchanged.
+             * @example [
+             *       "/bin/bash",
+             *       "-c"
+             *     ]
+             */
+            entrypoint?: string[];
             /**
              * @description Container disk in GB (ephemeral, wiped on restart)
              * @example 50
@@ -1459,6 +1607,21 @@ export interface components {
              * @description Serverless GPU pool IDs (as returned by `GET /v2/catalog/gpus` in
              *     `pool`). Workers are placed on whichever listed pool has capacity.
              *     Narrow a pool down to specific cards with `excludedTypes`.
+             *
+             *     On `PATCH`, `pools` and `excludedTypes` are one selection and are
+             *     replaced together, so sending `pools` by itself **clears the
+             *     exclusions**. Two cases:
+             *
+             *     - **Changing pools, keeping exclusions** — send both fields in one
+             *       request: `{"gpu": {"pools": ["ADA_24"], "excludedTypes":
+             *       ["NVIDIA L40"]}}`. `GET` the endpoint first to read the current
+             *       `excludedTypes` and resend the ones that still apply to the new
+             *       pools; an exclusion naming a type outside `pools` is a 400.
+             *     - **Changing only `count` or a CUDA constraint** — omit `pools`:
+             *       `{"gpu": {"minCudaVersion": "12.4"}}`. The pool list and the
+             *       exclusions are both left exactly as they are.
+             *
+             *     `excludedTypes` documents the full rule.
              * @example [
              *       "ADA_24"
              *     ]
@@ -1503,6 +1666,21 @@ export interface components {
              * @description Serverless GPU pool IDs (as returned by `GET /v2/catalog/gpus` in
              *     `pool`). Workers are placed on whichever listed pool has capacity.
              *     Narrow a pool down to specific cards with `excludedTypes`.
+             *
+             *     On `PATCH`, `pools` and `excludedTypes` are one selection and are
+             *     replaced together, so sending `pools` by itself **clears the
+             *     exclusions**. Two cases:
+             *
+             *     - **Changing pools, keeping exclusions** — send both fields in one
+             *       request: `{"gpu": {"pools": ["ADA_24"], "excludedTypes":
+             *       ["NVIDIA L40"]}}`. `GET` the endpoint first to read the current
+             *       `excludedTypes` and resend the ones that still apply to the new
+             *       pools; an exclusion naming a type outside `pools` is a 400.
+             *     - **Changing only `count` or a CUDA constraint** — omit `pools`:
+             *       `{"gpu": {"minCudaVersion": "12.4"}}`. The pool list and the
+             *       exclusions are both left exactly as they are.
+             *
+             *     `excludedTypes` documents the full rule.
              * @example [
              *       "ADA_24"
              *     ]
@@ -1530,6 +1708,21 @@ export interface components {
              * @description Serverless GPU pool IDs (as returned by `GET /v2/catalog/gpus` in
              *     `pool`). Workers are placed on whichever listed pool has capacity.
              *     Narrow a pool down to specific cards with `excludedTypes`.
+             *
+             *     On `PATCH`, `pools` and `excludedTypes` are one selection and are
+             *     replaced together, so sending `pools` by itself **clears the
+             *     exclusions**. Two cases:
+             *
+             *     - **Changing pools, keeping exclusions** — send both fields in one
+             *       request: `{"gpu": {"pools": ["ADA_24"], "excludedTypes":
+             *       ["NVIDIA L40"]}}`. `GET` the endpoint first to read the current
+             *       `excludedTypes` and resend the ones that still apply to the new
+             *       pools; an exclusion naming a type outside `pools` is a 400.
+             *     - **Changing only `count` or a CUDA constraint** — omit `pools`:
+             *       `{"gpu": {"minCudaVersion": "12.4"}}`. The pool list and the
+             *       exclusions are both left exactly as they are.
+             *
+             *     `excludedTypes` documents the full rule.
              * @example [
              *       "ADA_24"
              *     ]
@@ -1712,6 +1905,7 @@ export interface components {
         };
         ListEndpointsResponse: {
             endpoints: components["schemas"]["Endpoint"][];
+            pagination: components["schemas"]["Pagination"];
         };
         /**
          * @description Derived worker state, reconciled from the worker pod's lifecycle status
@@ -1881,11 +2075,13 @@ export interface components {
         };
         ListEndpointBuildsResponse: {
             /**
-             * @description Build history, newest first. At most the 100 most recent builds
-             *     are returned; any older build can still be fetched by id via
+             * @description Build history, newest first, cursor-paginated (an omitted `limit`
+             *     defaults to 100). Page with `cursor`/`limit` to walk the full
+             *     history, or fetch any build by id via
              *     `GET /v2/serverless/{id}/builds/{buildId}`.
              */
             builds: components["schemas"]["Build"][];
+            pagination: components["schemas"]["Pagination"];
         };
         ReleaseDiffEntry: {
             /**
@@ -1962,6 +2158,7 @@ export interface components {
             rollout: components["schemas"]["RolloutSummary"];
             /** @description Release history, newest first. */
             releases: components["schemas"]["Release"][];
+            pagination: components["schemas"]["Pagination"];
         };
         CreateEndpointRequest: components["schemas"]["ContainerConfig"] & unknown & {
             gpu?: components["schemas"]["CreateEndpointGpuConfig"];
@@ -2189,6 +2386,61 @@ export interface components {
              */
             keys: string[];
         };
+        /** @description An account-scoped secret: an encrypted string stored by Runpod, referenced from pod, serverless, and template environment variables with the `{{ RUNPOD_SECRET_<name> }}` placeholder, substituted with the secret's value when the pod or worker boots. The value is write-only and never returned by the API. */
+        Secret: {
+            /**
+             * @description Unique secret identifier
+             * @example 2q9m7x4cavgd
+             */
+            id: string;
+            /**
+             * @description Unique, human-readable name — the `<name>` referenced by the `RUNPOD_SECRET_<name>` placeholder. Immutable after creation.
+             * @example hf-token
+             */
+            name: string;
+            /**
+             * @description Human-readable description
+             * @example Hugging Face read token
+             */
+            description?: string | null;
+            /**
+             * Format: date-time
+             * @description When the secret was created
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When the secret's value was last set (creation or rotation)
+             */
+            valueLastUpdatedAt?: string | null;
+        };
+        CreateSecretRequest: {
+            /**
+             * @description Unique name for the secret — referenced from environment variables as `{{ RUNPOD_SECRET_<name> }}`; immutable after creation. Maximum 191 characters, must start with a letter or underscore, and may contain letters, digits, and `_.-/`. Names beginning with the reserved prefix `RUNPOD` are rejected (case-insensitive).
+             * @example hf-token
+             */
+            name: string;
+            /** @description The secret value. Write-only — never returned by the API. Must be smaller than 16 MiB of UTF-8 text (strictly under 16,777,216 bytes). */
+            value: string;
+            /**
+             * @description Optional human-readable description, at most 65,535 bytes of UTF-8 text.
+             * @example Hugging Face read token
+             */
+            description?: string;
+        };
+        /**
+         * @description Only the provided fields are updated; at least one field is required.
+         *     The secret's `name` is immutable.
+         */
+        UpdateSecretRequest: {
+            /** @description New secret value, replacing the current one. Write-only. Must be smaller than 16 MiB of UTF-8 text (strictly under 16,777,216 bytes). */
+            value?: string;
+            /** @description New human-readable description, at most 65,535 bytes of UTF-8 text. Send `""` to clear. */
+            description?: string;
+        };
+        ListSecretsResponse: {
+            secrets: components["schemas"]["Secret"][];
+        };
         Pod: {
             /**
              * @description Docker image reference
@@ -2196,7 +2448,13 @@ export interface components {
              */
             image: string;
             /**
-             * @description Arguments passed to the container entrypoint
+             * @description The container's command, as a single raw string. This is the field `entrypoint` and `cmd` encode into, exposed in its stored form.
+             *
+             *     Two shapes are accepted. A bare shell string is treated as CMD and split into arguments, which is what the console's "Container start command" field writes. A JSON object of the form `{"entrypoint":[...],"cmd":[...]}` sets either or both explicitly.
+             *
+             *     Responses always return both representations: `args` exactly as stored, plus the deconstructed `entrypoint` and `cmd`. Supplying `args` together with `entrypoint` or `cmd` is allowed only when they describe the same command, so a read-modify-write client can send back everything it received. Send `""` to clear, omit to leave unchanged.
+             * @example --model meta-llama/Llama-3-8B --max-model-len 8192
+             * @example {"entrypoint":["/bin/bash","-c"],"cmd":["python -u main.py"]}
              * @example
              */
             args: string;
@@ -2314,7 +2572,7 @@ export interface components {
              * @description Create-time flag telling the provisioner to start JupyterLab:
              *     injects a generated `JUPYTER_PASSWORD` environment variable,
              *     unless the request already sets one. Only images that honor
-             *     the convention start Jupyter from it (RunPod official images
+             *     the convention start Jupyter from it (Runpod official images
              *     do); expose `8888/http` in `ports` to reach it.
              *
              *     Not part of the pod's readable config — never returned by
@@ -2330,7 +2588,7 @@ export interface components {
              *     already sets one. **Requires registered keys** (`PUT
              *     /v2/account/ssh-keys`) — with none registered the flag does
              *     nothing and the pod has no SSH access. Only images that honor
-             *     the convention start sshd from it (all RunPod official images
+             *     the convention start sshd from it (all Runpod official images
              *     do). Connect using the pod's `ssh` block; the `ssh.direct`
              *     variant additionally needs a `22/tcp` entry in `ports`.
              *
@@ -2386,9 +2644,11 @@ export interface components {
         PodActionRequest: {
             action: components["schemas"]["PodAction"];
         };
-        ListPodsResponse: {
+        /** @description A bare list of pods. `GET /v2/clusters/{id}/pods` returns it as-is (a cluster's members are a small, complete set); `GET /v2/pods` composes it with the pagination block via ListPodsResponse. */
+        PodList: {
             pods: components["schemas"]["Pod"][];
         };
+        ListPodsResponse: components["schemas"]["PodList"] & components["schemas"]["Paginated"];
         /**
          * @description Cluster type. TRAINING is the generic distributed-training cluster; SLURM provisions a managed Slurm controller/compute topology; RAY provisions a managed Ray head/worker topology; APPLICATION is a general multi-node application cluster.
          * @example TRAINING
@@ -2523,6 +2783,18 @@ export interface components {
             name: string;
             type: components["schemas"]["ClusterType"];
             /**
+             * @description ID of a pod template to provision every member pod from. The
+             *     template supplies the container settings (image, args, disk,
+             *     env, ports) and the container registry credential for private
+             *     images — the only private-image path for clusters. Mutually
+             *     exclusive with `image`, `args`, `entrypoint`, `cmd`, `disk`,
+             *     `env`, `ports`, and `mounts` (rejected with 400). The cluster
+             *     retains the link: the `template` response field is set. Must be
+             *     a non-serverless pod template accessible to the caller.
+             * @example 30zmvf89kd
+             */
+            templateId?: string;
+            /**
              * @description Preferred data centers for placement. Omit or pass an empty
              *     array to let the scheduler choose. A cluster is always placed
              *     within a single data center.
@@ -2562,7 +2834,13 @@ export interface components {
              */
             image: string;
             /**
-             * @description Arguments passed to the container entrypoint
+             * @description The container's command, as a single raw string. This is the field `entrypoint` and `cmd` encode into, exposed in its stored form.
+             *
+             *     Two shapes are accepted. A bare shell string is treated as CMD and split into arguments, which is what the console's "Container start command" field writes. A JSON object of the form `{"entrypoint":[...],"cmd":[...]}` sets either or both explicitly.
+             *
+             *     Responses always return both representations: `args` exactly as stored, plus the deconstructed `entrypoint` and `cmd`. Supplying `args` together with `entrypoint` or `cmd` is allowed only when they describe the same command, so a read-modify-write client can send back everything it received. Send `""` to clear, omit to leave unchanged.
+             * @example --model meta-llama/Llama-3-8B --max-model-len 8192
+             * @example {"entrypoint":["/bin/bash","-c"],"cmd":["python -u main.py"]}
              * @example
              */
             args: string;
@@ -2661,7 +2939,7 @@ export interface components {
              * @description Start JupyterLab in containers created from this template:
              *     injects a generated `JUPYTER_PASSWORD` environment variable,
              *     unless `env` already sets one. Only images that honor the
-             *     convention start Jupyter from it (RunPod official images do);
+             *     convention start Jupyter from it (Runpod official images do);
              *     expose `8888/http` in `ports` to reach it. Defaults to `true`
              *     when omitted, matching console-created templates.
              * @default true
@@ -2674,7 +2952,7 @@ export interface components {
              *     deployer's registered SSH public keys (`PUT
              *     /v2/account/ssh-keys` — with none registered the flag does
              *     nothing), unless `env` already sets one. Only images that
-             *     honor the convention start sshd from it (all RunPod official
+             *     honor the convention start sshd from it (all Runpod official
              *     images do); direct SSH also needs a `22/tcp` entry in
              *     `ports`. Defaults to `true` when omitted, matching
              *     console-created templates.
@@ -2696,9 +2974,11 @@ export interface components {
             /** @description Provision SSH access at container startup (`PUBLIC_KEY` env injection). See the create-time field for details. */
             startSsh?: boolean;
         };
-        ListTemplatesResponse: {
+        /** @description A bare list of templates. `GET /v2/catalog/templates` returns it as-is (the catalog is a capped, curated set); `GET /v2/templates` composes it with the pagination block via ListTemplatesResponse. */
+        TemplateList: {
             templates: components["schemas"]["Template"][];
         };
+        ListTemplatesResponse: components["schemas"]["TemplateList"] & components["schemas"]["Paginated"];
         NetworkVolume: {
             /**
              * @description Unique network volume identifier
@@ -3158,7 +3438,7 @@ export interface components {
          * @enum {string}
          */
         BillingBucketSize: "hour" | "day" | "week" | "month" | "year";
-        /** @description Total spend across all billable Runpod resources with each cost component broken out, fully prefixed by resource. Backs the aggregate record's amounts and the metadata totals. */
+        /** @description Total spend across all billable Runpod resources with each cost component broken out, fully prefixed by resource. Backs the aggregate record's amounts and the metadata totals. Serverless amounts are inclusive of platform charges. */
         BillingAmounts: {
             /**
              * Format: double
@@ -3198,7 +3478,8 @@ export interface components {
             serverlessDiskAmount: number;
             /**
              * Format: double
-             * @description Serverless platform fee in USD for the bucket.
+             * @deprecated
+             * @description Unused and always 0. Platform charges are included in the serverless compute amounts.
              */
             serverlessFeeAmount: number;
             /**
@@ -3266,7 +3547,7 @@ export interface components {
              */
             podId: string;
         };
-        /** @description Serverless cost components. Backs a record's amounts and the metadata totals. */
+        /** @description Serverless cost components, inclusive of platform charges. Backs a record's amounts and the metadata totals. */
         ServerlessBillingAmounts: {
             /**
              * Format: double
@@ -3291,7 +3572,8 @@ export interface components {
             diskAmount: number;
             /**
              * Format: double
-             * @description Serverless platform fee in USD for the bucket.
+             * @deprecated
+             * @description Unused and always 0. Platform charges are included in the GPU and CPU amounts.
              */
             feeAmount: number;
         };
@@ -3618,6 +3900,21 @@ export interface components {
          */
         BillingLastN: number;
         /**
+         * @description Opaque resume cursor — pass the previous response's `pagination.nextCursor` through verbatim; omit for the first page. A cursor is only valid for the operation and parameters that issued it; a malformed or foreign cursor is rejected with 422.
+         * @example Y3JlYXRlZEF0PTE3NDg3ODA0MDA
+         */
+        PaginationCursor: string;
+        /**
+         * @description Page size, 1–1000. Defaults to 1000 when omitted.
+         * @example 50
+         */
+        PaginationLimit: number;
+        /**
+         * @description Page size, 1–100. Defaults to 100 when omitted.
+         * @example 50
+         */
+        PaginationLimitBuilds: number;
+        /**
          * @description Comma-separated optional expansions; see `CatalogInclude` for the supported values.
          * @example [
          *       "AVAILABILITY"
@@ -3775,6 +4072,229 @@ export interface operations {
             };
         };
     };
+    listSecrets: {
+        parameters: {
+            query?: {
+                /** @description When provided, returns only the secret with this name (case-insensitive). */
+                name?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSecretsResponse"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            429: components["responses"]["TooManyRequestsError"];
+            /** @description Error */
+            default: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSecretRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Secret"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            /** @description A secret with this name already exists. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntityError"];
+            429: components["responses"]["TooManyRequestsError"];
+            /** @description Error */
+            default: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Secret identifier
+                 * @example 2q9m7x4cavgd
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Secret"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["NotFoundError"];
+            429: components["responses"]["TooManyRequestsError"];
+            /** @description Error */
+            default: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Secret identifier
+                 * @example 2q9m7x4cavgd
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. Response has no body. */
+            204: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["NotFoundError"];
+            429: components["responses"]["TooManyRequestsError"];
+            /** @description Error */
+            default: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Secret identifier
+                 * @example 2q9m7x4cavgd
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSecretRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Secret"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["NotFoundError"];
+            422: components["responses"]["UnprocessableEntityError"];
+            429: components["responses"]["TooManyRequestsError"];
+            /** @description Error */
+            default: {
+                headers: {
+                    RateLimit: components["headers"]["RateLimit"];
+                    "RateLimit-Policy": components["headers"]["RateLimit-Policy"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listPods: {
         parameters: {
             query?: {
@@ -3783,6 +4303,16 @@ export interface operations {
                  * @example false
                  */
                 includeClusterPods?: boolean;
+                /**
+                 * @description Opaque resume cursor — pass the previous response's `pagination.nextCursor` through verbatim; omit for the first page. A cursor is only valid for the operation and parameters that issued it; a malformed or foreign cursor is rejected with 422.
+                 * @example Y3JlYXRlZEF0PTE3NDg3ODA0MDA
+                 */
+                cursor?: components["parameters"]["PaginationCursor"];
+                /**
+                 * @description Page size, 1–1000. Defaults to 1000 when omitted.
+                 * @example 50
+                 */
+                limit?: components["parameters"]["PaginationLimit"];
             };
             header?: never;
             path?: never;
@@ -3845,6 +4375,15 @@ export interface operations {
             401: components["responses"]["UnauthorizedError"];
             403: components["responses"]["ForbiddenError"];
             404: components["responses"]["NotFoundError"];
+            /** @description The incoming request body or expanded upstream request exceeds the 102400 byte limit, or the upstream rejects the request as too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorResponse"];
+                };
+            };
             422: components["responses"]["UnprocessableEntityError"];
             429: components["responses"]["TooManyRequestsError"];
             /** @description Error */
@@ -4385,7 +4924,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListPodsResponse"];
+                    "application/json": components["schemas"]["PodList"];
                 };
             };
             401: components["responses"]["UnauthorizedError"];
@@ -4413,7 +4952,18 @@ export interface operations {
     };
     listEndpoints: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Opaque resume cursor — pass the previous response's `pagination.nextCursor` through verbatim; omit for the first page. A cursor is only valid for the operation and parameters that issued it; a malformed or foreign cursor is rejected with 422.
+                 * @example Y3JlYXRlZEF0PTE3NDg3ODA0MDA
+                 */
+                cursor?: components["parameters"]["PaginationCursor"];
+                /**
+                 * @description Page size, 1–1000. Defaults to 1000 when omitted.
+                 * @example 50
+                 */
+                limit?: components["parameters"]["PaginationLimit"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4668,7 +5218,18 @@ export interface operations {
     };
     listEndpointReleases: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Opaque resume cursor — pass the previous response's `pagination.nextCursor` through verbatim; omit for the first page. A cursor is only valid for the operation and parameters that issued it; a malformed or foreign cursor is rejected with 422.
+                 * @example Y3JlYXRlZEF0PTE3NDg3ODA0MDA
+                 */
+                cursor?: components["parameters"]["PaginationCursor"];
+                /**
+                 * @description Page size, 1–1000. Defaults to 1000 when omitted.
+                 * @example 50
+                 */
+                limit?: components["parameters"]["PaginationLimit"];
+            };
             header?: never;
             path: {
                 /**
@@ -4711,7 +5272,18 @@ export interface operations {
     };
     listEndpointBuilds: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Opaque resume cursor — pass the previous response's `pagination.nextCursor` through verbatim; omit for the first page. A cursor is only valid for the operation and parameters that issued it; a malformed or foreign cursor is rejected with 422.
+                 * @example Y3JlYXRlZEF0PTE3NDg3ODA0MDA
+                 */
+                cursor?: components["parameters"]["PaginationCursor"];
+                /**
+                 * @description Page size, 1–100. Defaults to 100 when omitted.
+                 * @example 50
+                 */
+                limit?: components["parameters"]["PaginationLimitBuilds"];
+            };
             header?: never;
             path: {
                 /**
@@ -4879,7 +5451,18 @@ export interface operations {
     };
     listTemplates: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Opaque resume cursor — pass the previous response's `pagination.nextCursor` through verbatim; omit for the first page. A cursor is only valid for the operation and parameters that issued it; a malformed or foreign cursor is rejected with 422.
+                 * @example Y3JlYXRlZEF0PTE3NDg3ODA0MDA
+                 */
+                cursor?: components["parameters"]["PaginationCursor"];
+                /**
+                 * @description Page size, 1–1000. Defaults to 1000 when omitted.
+                 * @example 50
+                 */
+                limit?: components["parameters"]["PaginationLimit"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5991,7 +6574,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListTemplatesResponse"];
+                    "application/json": components["schemas"]["TemplateList"];
                 };
             };
             401: components["responses"]["UnauthorizedError"];

@@ -69,6 +69,42 @@ encodings that need a different runtime serializer.
 CI verifies generated freshness, Python and TypeScript tests, and installed
 ESM/CJS consumers on Node 20, 22, and 24. The separate SDK release workflow validates the same matrix before publishing.
 
+## The other generator: runpod-mcp
+
+Two repositories generate from the same `https://api.runpod.io/v2/openapi.json`,
+and they produce different things for different consumers. Knowing which is
+which saves an afternoon when an API change looks half-applied.
+
+This repository generates **types**. `spec/openapi.yaml` becomes
+`src/generated/schema.ts`, a file of TypeScript declarations with no runtime
+code. It is what lets `sdk.GET("/v2/pods")` know that the path exists, which
+query parameters it accepts, and what shape comes back. Everything around it —
+retries, deadlines, rate-limit metadata, the SSE iterator — is written by hand.
+
+The [MCP server](https://github.com/runpod/runpod-mcp) generates **tool
+definitions**. Its own vendored copy of the spec becomes
+`src/specgen/generated/tools.gen.ts`, an array of plain objects — tool name,
+description written for a language model, JSON Schema for the arguments, and
+the method and path to call. That array is data read at runtime to answer
+`tools/list` and to route a call, not types erased at compile time.
+
+The two are stacked rather than parallel: the MCP server's generated tools
+describe what to call, and the call itself goes through this SDK, which it
+pins as a devDependency and bundles into its build. So an upstream API change
+usually has to be taken up **twice, in order**:
+
+1. Here — pull the spec, regenerate, land a changeset, and publish. The daily
+   automation opens the spec PR but deliberately does not version or publish,
+   so a merged spec update alone changes nothing a consumer can install.
+2. In runpod-mcp — pull the spec and regenerate its tools, and bump the pinned
+   SDK version when its hand-written tools need the new types.
+
+Step 2's generated half picks up new paths and parameters on its own. Its
+hand-written tools do not, and they are the ones that call this SDK, so they
+stay on the old contract until a published version carries the new types. A
+resync that stops after step 1, or after step 2's regeneration alone, leaves
+part of the surface stale while looking complete.
+
 ## Release preparation
 
 Use [Changesets](releases.md) to record release notes and compatibility changes.
