@@ -50,7 +50,9 @@ and manually squash-merge the release PR when ready to release.
 Publication requires the workflow commit to be the merge commit of a release PR
 from `changeset-release/main` or `automation/production-spec` in the same
 repository. The daily spec update PR carries its own minor bump and changelog,
-so merging it releases without a separate version PR. Ordinary commits, the
+so merging it releases without a separate version PR, even if changesets from
+other PRs landed on `main` after the bot last refreshed the branch. Those go
+into the next version PR. Ordinary commits, the
 initial repository import, and open release PRs do not publish. The workflow
 revalidates Node 20/22/24, checks the packed package, publishes to npm, and creates
 a `v<version>` tag and GitHub release. A failure stops the remaining steps.

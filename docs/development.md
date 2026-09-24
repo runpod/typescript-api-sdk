@@ -52,8 +52,11 @@ before merging. When the spec changed, the update PR also carries a minor
 version bump and changelog entry, consuming any changesets pending on the
 default branch. Merging it publishes that version (see
 [releases](releases.md)). Nothing merges automatically, so review the
-compatibility impact before merging. Bot-branch edits can be overwritten on the next refresh; land durable fixes on
-the default branch instead.
+compatibility impact before merging. If the change needs a bigger bump than
+minor, land a changeset with that bump on the default branch and dispatch the
+workflow again; Changesets takes the highest pending bump. Bot-branch edits can
+be overwritten on the next refresh; land durable fixes on the default branch
+instead.
 
 To enable automated update PRs, allow GitHub Actions to create pull requests.
 The update job needs `contents: write`, `pull-requests: write`, and `actions: write`.

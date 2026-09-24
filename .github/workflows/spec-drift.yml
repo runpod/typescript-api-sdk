@@ -46,17 +46,20 @@ jobs:
       # The update PR carries its own version bump and changelog, so merging it
       # releases. Main's pending changesets are consumed into the same version.
       - name: Version the spec update
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if git diff --quiet -- spec/openapi.yaml src/generated/schema.ts; then
             echo 'No spec change; nothing to version.'
             exit 0
           fi
-          cat > .changeset/production-spec-update.md <<'EOF'
+          cat > .changeset/production-spec-update.md <<EOF
           ---
           '@runpod/typescript-api-sdk': minor
           ---
 
-          Refresh the vendored production spec and regenerate the types.
+          Refresh the vendored production spec as of $(date -u +%Y-%m-%d) and
+          regenerate the types. Validation run: $RUN_URL
           EOF
           pnpm changeset:version
       # Run even with no diff so the action can close a superseded update PR.
