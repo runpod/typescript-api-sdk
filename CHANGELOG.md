@@ -1,5 +1,15 @@
 # @runpod/typescript-api-sdk
 
+## 0.2.0
+
+### Minor Changes
+
+- 71be666: Resync the vendored production spec and regenerate the types. Adds cursor
+  pagination on the list endpoints (`cursor` and `limit` query parameters, and a
+  `pagination` block carrying `nextCursor` and `hasNextPage` on the response) and
+  the account-secrets paths. Both are additive upstream, so existing calls keep
+  their current types.
+
 ## 0.1.1
 
 ### Patch Changes
