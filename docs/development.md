@@ -48,9 +48,11 @@ fail the run before updating the PR.
 
 The workflow explicitly dispatches `SDK checks` on the update branch for Node
 20/22/24, rather than relying on bot-generated PR events. Review that matrix
-before merging. Neither workflow merges, bumps versions, tags, or publishes.
-Review the compatibility impact of spec changes before choosing a version bump.
-Bot-branch edits can be overwritten on the next refresh; land durable fixes on
+before merging. When the spec changed, the update PR also carries a minor
+version bump and changelog entry, consuming any changesets pending on the
+default branch. Merging it publishes that version (see
+[releases](releases.md)). Nothing merges automatically, so review the
+compatibility impact before merging. Bot-branch edits can be overwritten on the next refresh; land durable fixes on
 the default branch instead.
 
 To enable automated update PRs, allow GitHub Actions to create pull requests.
@@ -93,9 +95,8 @@ describe what to call, and the call itself goes through this SDK, which it
 pins as a devDependency and bundles into its build. So an upstream API change
 usually has to be taken up **twice, in order**:
 
-1. Here: pull the spec, regenerate, land a changeset, and publish. The daily
-   automation opens the spec PR but deliberately does not version or publish,
-   so a merged spec update alone changes nothing a consumer can install.
+1. Here: pull the spec, regenerate, bump the version, and publish. The daily
+   automation's spec PR carries the version bump, so merging it publishes.
 2. In runpod-mcp: pull the spec and regenerate its tools, and bump the pinned
    SDK version when its hand-written tools need the new types.
 

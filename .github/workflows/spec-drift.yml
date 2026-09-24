@@ -43,6 +43,22 @@ jobs:
       - run: pnpm test
       - run: pnpm test:package
       - run: pnpm test:examples
+      # The update PR carries its own version bump and changelog, so merging it
+      # releases. Main's pending changesets are consumed into the same version.
+      - name: Version the spec update
+        run: |
+          if git diff --quiet -- spec/openapi.yaml src/generated/schema.ts; then
+            echo 'No spec change; nothing to version.'
+            exit 0
+          fi
+          cat > .changeset/production-spec-update.md <<'EOF'
+          ---
+          '@runpod/typescript-api-sdk': minor
+          ---
+
+          Refresh the vendored production spec and regenerate the types.
+          EOF
+          pnpm changeset:version
       # Run even with no diff so the action can close a superseded update PR.
       - name: Create or update the spec review PR
         id: update-pr
@@ -53,6 +69,10 @@ jobs:
           add-paths: |
             spec/openapi.yaml
             src/generated/schema.ts
+            .changeset
+            package.json
+            CHANGELOG.md
+            pnpm-lock.yaml
           commit-message: 'chore(spec): refresh production API contract'
           title: 'chore(spec): review production API contract update'
           body: |
@@ -67,11 +87,12 @@ jobs:
             Check those results before merging.
 
             Review removed or changed operations, request/response types, and compatibility.
-            Classify the eventual version bump explicitly; a spec diff is not necessarily a patch.
+            This PR bumps the version as a minor release and writes the changelog.
+            **Merging it publishes that version to npm** and creates the tag and GitHub release.
             This branch is regenerated from the default branch: put durable fixes there,
             rather than editing the bot branch.
 
-            No automatic merge, version bump, tag, GitHub release, or npm publication.
+            No automatic merge.
       - name: Run the full runtime matrix on the generated branch
         if: steps.update-pr.outputs.pull-request-number != '' && steps.update-pr.outputs.pull-request-operation != 'closed'
         env:

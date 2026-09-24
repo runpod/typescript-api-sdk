@@ -2,10 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
+// Branches whose PRs carry a version bump: the Changesets release PR and the
+// daily spec update PR.
+const releaseBranches = ['changeset-release/main', 'automation/production-spec'];
+
 export function approvedRelease(pr, repository, sha) {
   return Boolean(pr.merged_at && pr.merge_commit_sha === sha &&
     pr.base?.ref === 'main' && pr.base?.repo?.full_name === repository &&
-    pr.head?.ref === 'changeset-release/main' && pr.head?.repo?.full_name === repository);
+    releaseBranches.includes(pr.head?.ref) && pr.head?.repo?.full_name === repository);
 }
 
 export function releaseVersion(pkg, changelog) {
