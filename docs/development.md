@@ -48,10 +48,15 @@ fail the run before updating the PR.
 
 The workflow explicitly dispatches `SDK checks` on the update branch for Node
 20/22/24, rather than relying on bot-generated PR events. Review that matrix
-before merging. Neither workflow merges, bumps versions, tags, or publishes.
-Review the compatibility impact of spec changes before choosing a version bump.
-Bot-branch edits can be overwritten on the next refresh; land durable fixes on
-the default branch instead.
+before merging. When the spec changed, the update PR also carries a minor
+version bump and changelog entry, consuming any changesets pending on the
+default branch. Merging it publishes that version (see
+[releases](releases.md)). Nothing merges automatically, so review the
+compatibility impact before merging. If the change needs a bigger bump than
+minor, land a changeset with that bump on the default branch and dispatch the
+workflow again; Changesets takes the highest pending bump. Bot-branch edits can
+be overwritten on the next refresh; land durable fixes on the default branch
+instead.
 
 To enable automated update PRs, allow GitHub Actions to create pull requests.
 The update job needs `contents: write`, `pull-requests: write`, and `actions: write`.
@@ -68,6 +73,41 @@ encodings that need a different runtime serializer.
 
 CI verifies generated freshness, Python and TypeScript tests, and installed
 ESM/CJS consumers on Node 20, 22, and 24. The separate SDK release workflow validates the same matrix before publishing.
+
+## The other generator: runpod-mcp
+
+Two repositories generate from the same `https://api.runpod.io/v2/openapi.json`,
+and they produce different things for different consumers. Knowing which is
+which saves an afternoon when an API change looks half-applied.
+
+This repository generates **types**. `spec/openapi.yaml` becomes
+`src/generated/schema.ts`, a file of TypeScript declarations with no runtime
+code. It is what lets `sdk.GET("/v2/pods")` know that the path exists, which
+query parameters it accepts, and what shape comes back. Everything around it
+(retries, deadlines, rate-limit metadata, the SSE iterator) is written by hand.
+
+The [MCP server](https://github.com/runpod/runpod-mcp) generates **tool
+definitions**. Its own vendored copy of the spec becomes
+`src/specgen/generated/tools.gen.ts`, an array of plain objects: tool name,
+description written for a language model, JSON Schema for the arguments, and
+the method and path to call. That array is data read at runtime to answer
+`tools/list` and to route a call, not types erased at compile time.
+
+The two are stacked rather than parallel: the MCP server's generated tools
+describe what to call, and the call itself goes through this SDK, which it
+pins as a devDependency and bundles into its build. So an upstream API change
+usually has to be taken up **twice, in order**:
+
+1. Here: pull the spec, regenerate, bump the version, and publish. The daily
+   automation's spec PR carries the version bump, so merging it publishes.
+2. In runpod-mcp: pull the spec and regenerate its tools, and bump the pinned
+   SDK version when its hand-written tools need the new types.
+
+Step 2's generated half picks up new paths and parameters on its own. Its
+hand-written tools do not, and they are the ones that call this SDK, so they
+stay on the old contract until a published version carries the new types. A
+resync that stops after step 1, or after step 2's regeneration alone, leaves
+part of the surface stale while looking complete.
 
 ## Release preparation
 

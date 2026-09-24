@@ -10,10 +10,12 @@ const pr = { merged_at: '2026-01-01', merge_commit_sha: sha,
 
 test('only the merged release PR commit is approved, including manual retries', () => {
   assert.equal(approvedRelease(pr, repository, sha), true);
+  assert.equal(approvedRelease({ ...pr, head: { ...pr.head, ref: 'automation/production-spec' } }, repository, sha), true);
   for (const rejected of [
     { ...pr, merged_at: null }, { ...pr, merge_commit_sha: 'b'.repeat(40) },
     { ...pr, head: { ...pr.head, ref: 'feature' } },
     { ...pr, head: { ...pr.head, repo: { full_name: 'fork/sdk' } } },
+    { ...pr, head: { ref: 'automation/production-spec', repo: { full_name: 'fork/sdk' } } },
     { ...pr, base: { ...pr.base, ref: 'development' } },
   ]) assert.equal(approvedRelease(rejected, repository, sha), false);
 });
