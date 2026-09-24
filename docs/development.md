@@ -78,12 +78,12 @@ which saves an afternoon when an API change looks half-applied.
 This repository generates **types**. `spec/openapi.yaml` becomes
 `src/generated/schema.ts`, a file of TypeScript declarations with no runtime
 code. It is what lets `sdk.GET("/v2/pods")` know that the path exists, which
-query parameters it accepts, and what shape comes back. Everything around it —
-retries, deadlines, rate-limit metadata, the SSE iterator — is written by hand.
+query parameters it accepts, and what shape comes back. Everything around it
+(retries, deadlines, rate-limit metadata, the SSE iterator) is written by hand.
 
 The [MCP server](https://github.com/runpod/runpod-mcp) generates **tool
 definitions**. Its own vendored copy of the spec becomes
-`src/specgen/generated/tools.gen.ts`, an array of plain objects — tool name,
+`src/specgen/generated/tools.gen.ts`, an array of plain objects: tool name,
 description written for a language model, JSON Schema for the arguments, and
 the method and path to call. That array is data read at runtime to answer
 `tools/list` and to route a call, not types erased at compile time.
@@ -93,10 +93,10 @@ describe what to call, and the call itself goes through this SDK, which it
 pins as a devDependency and bundles into its build. So an upstream API change
 usually has to be taken up **twice, in order**:
 
-1. Here — pull the spec, regenerate, land a changeset, and publish. The daily
+1. Here: pull the spec, regenerate, land a changeset, and publish. The daily
    automation opens the spec PR but deliberately does not version or publish,
    so a merged spec update alone changes nothing a consumer can install.
-2. In runpod-mcp — pull the spec and regenerate its tools, and bump the pinned
+2. In runpod-mcp: pull the spec and regenerate its tools, and bump the pinned
    SDK version when its hand-written tools need the new types.
 
 Step 2's generated half picks up new paths and parameters on its own. Its
