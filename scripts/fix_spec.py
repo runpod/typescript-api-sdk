@@ -86,8 +86,17 @@ class SpecDumper(yaml.SafeDumper):
         return True
 
 
+# Characters YAML reads as line breaks besides \n. Unescaped in a plain,
+# single-quoted or block scalar they fold to a space on reload (the 2026-10
+# global-volume `name` pattern ends in a raw U+0085), so such strings are
+# double-quoted, where the emitter escapes them as \N, \L and \P.
+YAML_EXTRA_BREAKS = re.compile("[\x85\u2028\u2029]")
+
+
 def represent_str(dumper, value):
     """Multi-line text stays readable; ambiguous scalars get quoted."""
+    if YAML_EXTRA_BREAKS.search(value):
+        return dumper.represent_scalar(STR_TAG, value, style='"')
     if "\n" in value.rstrip("\n"):
         # Author-chosen line breaks (bullet lists, PATCH-semantics blocks).
         return dumper.represent_scalar(STR_TAG, value, style="|")
@@ -403,12 +412,11 @@ DESCRIPTION_EDITS: list[tuple[tuple[str, ...], str, str]] = [
     # external API consumers; the contract half is what callers need.
     (
         ("components", "schemas", "Mounts", "description"),
-        "At-most-one of `persistent` or\n`network` may be set today (mutually exclusive, enforced at the\n"
-        "handler with 400 if both are present). The `network` field is an\n"
-        "array for forward compatibility with eventual multi-network-volume\n"
-        "support, but `maxItems` is 1 today.",
-        "At most one of `persistent` or\n`network` may be set: sending both is rejected with 400. The\n"
-        "`network` field is an array for forward compatibility with\n"
+        "`persistent` is mutually exclusive\nwith both `network` and `global` (enforced at the handler with 400 if\n"
+        "combined). The `network` field is an array for forward compatibility\n"
+        "with eventual multi-network-volume support, but `maxItems` is 1 today.",
+        "`persistent` is mutually exclusive\nwith both `network` and `global`: combining them is rejected with 400.\n"
+        "The `network` field is an array for forward compatibility with\n"
         "multi-network-volume support; `maxItems` is 1.",
     ),
     (
