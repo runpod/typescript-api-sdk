@@ -1442,12 +1442,10 @@ export interface components {
             registry?: string | null;
         };
         /**
-         * @description The mount kinds every resource that takes `mounts` shares. At-most-one
-         *     of `persistent` or `network` may be set today (mutually exclusive,
-         *     enforced at the handler with 400 if both are present). The `network`
-         *     field is an array for forward compatibility with eventual
-         *     multi-network-volume support, but `maxItems` is 1 today. Left open so
-         *     that concrete schemas can extend it and close themselves.
+         * @description The mount kinds every resource that takes `mounts` shares. At most one
+         *     of `persistent` or `network` may be set: combining them is rejected
+         *     with 400. The `network` field is an array for forward compatibility
+         *     with multi-network-volume support; `maxItems` is 1.
          */
         BaseMounts: {
             persistent?: components["schemas"]["PersistentMount"];
@@ -3255,10 +3253,7 @@ export interface components {
             globalVolumes: components["schemas"]["GlobalVolume"][];
             pagination: components["schemas"]["Pagination"];
         };
-        /**
-         * @description A volume mounted on every worker, always at `/runpod-volume`. Custom
-         *     paths are not supported yet.
-         */
+        /** @description A volume mounted on every worker, always at `/runpod-volume`. */
         EndpointMount: {
             /**
              * @description ID of a NetworkVolume (under `network`) or GlobalVolume (under `global`).

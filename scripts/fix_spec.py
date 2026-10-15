@@ -420,6 +420,22 @@ DESCRIPTION_EDITS: list[tuple[tuple[str, ...], str, str]] = [
         "multi-network-volume support; `maxItems` is 1.",
     ),
     (
+        ("components", "schemas", "BaseMounts", "description"),
+        "At-most-one\nof `persistent` or `network` may be set today (mutually exclusive,\n"
+        "enforced at the handler with 400 if both are present). The `network`\n"
+        "field is an array for forward compatibility with eventual\n"
+        "multi-network-volume support, but `maxItems` is 1 today. Left open so\n"
+        "that concrete schemas can extend it and close themselves.",
+        "At most one\nof `persistent` or `network` may be set: combining them is rejected\n"
+        "with 400. The `network` field is an array for forward compatibility\n"
+        "with multi-network-volume support; `maxItems` is 1.",
+    ),
+    (
+        ("components", "schemas", "EndpointMount", "description"),
+        "always at `/runpod-volume`. Custom\npaths are not supported yet.",
+        "always at `/runpod-volume`.",
+    ),
+    (
         ("components", "schemas", "TemplateMounts", "description"),
         "Templates support only a\nsingle persistent mount today; any `network` property is rejected\n"
         "with 422 by the schema validator.",

@@ -566,12 +566,10 @@ components:
     BaseMounts:
       type: object
       description: |
-        The mount kinds every resource that takes `mounts` shares. At-most-one
-        of `persistent` or `network` may be set today (mutually exclusive,
-        enforced at the handler with 400 if both are present). The `network`
-        field is an array for forward compatibility with eventual
-        multi-network-volume support, but `maxItems` is 1 today. Left open so
-        that concrete schemas can extend it and close themselves.
+        The mount kinds every resource that takes `mounts` shares. At most one
+        of `persistent` or `network` may be set: combining them is rejected
+        with 400. The `network` field is an array for forward compatibility
+        with multi-network-volume support; `maxItems` is 1.
       properties:
         persistent:
           $ref: '#/components/schemas/PersistentMount'
@@ -2839,9 +2837,8 @@ components:
       type: object
       required: [volumeId]
       additionalProperties: false
-      description: |
-        A volume mounted on every worker, always at `/runpod-volume`. Custom
-        paths are not supported yet.
+      description: >
+        A volume mounted on every worker, always at `/runpod-volume`.
       properties:
         volumeId:
           type: string
