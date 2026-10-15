@@ -15,6 +15,10 @@ results, use the existing [runpod-sdk](https://github.com/runpod/js-sdk).
 
 ## Using an AI agent instead?
 
+<!-- runpod-agent-setup:start -->
+**Using an AI agent?** Point it to https://docs.runpod.io/agent-setup.md to install the Runpod skills and MCP server.
+<!-- runpod-agent-setup:end -->
+
 The **[Runpod plugin](https://github.com/runpod/runpod-plugins-official#install)**
 adds Runpod skills and tools to your agent. In Claude Code:
 
