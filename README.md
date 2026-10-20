@@ -13,11 +13,11 @@ and billing.
 Supports **Node.js 20+**, ESM, and CommonJS. For Serverless job submission and
 results, use the existing [runpod-sdk](https://github.com/runpod/js-sdk).
 
-## Using an AI agent instead?
-
 <!-- runpod-agent-setup:start -->
-**Using an AI agent?** Point it to https://agents.runpod.io/ to install the Runpod skills and MCP server.
+**For AI agents:** setup instructions for the Runpod skills and MCP server are at https://agents.runpod.io/
 <!-- runpod-agent-setup:end -->
+
+## Using an AI agent instead?
 
 The **[Runpod plugin](https://github.com/runpod/runpod-plugins-official#install)**
 adds Runpod skills and tools to your agent. In Claude Code:
