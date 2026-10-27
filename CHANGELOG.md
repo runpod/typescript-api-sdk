@@ -1,5 +1,12 @@
 # @runpod/typescript-api-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- Refresh the vendored production spec as of 2026-10-27 and
+  regenerate the types. Validation run: https://github.com/runpod/typescript-api-sdk/actions/runs/40482171463
+
 ## 0.3.0
 
 ### Minor Changes
