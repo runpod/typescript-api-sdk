@@ -16,7 +16,7 @@ concurrency:
 jobs:
   version:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 15
     outputs:
       has_changesets: ${{ steps.changesets.outputs.hasChangesets }}
@@ -59,7 +59,7 @@ jobs:
   # other PRs are still pending.
   eligibility:
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       eligible: ${{ steps.plan.outputs.eligible }}
     permissions:
@@ -83,7 +83,7 @@ jobs:
   publish:
     needs: [eligibility, validate]
     if: needs.eligibility.outputs.eligible == 'true'
-    runs-on: ubuntu-latest
+    runs-on: runpod-4vCPU-ubuntu-2404 # GitHub-hosted (trusted publishing needs that) with allow-listed static IPs
     timeout-minutes: 20
     environment: npm
     permissions:
