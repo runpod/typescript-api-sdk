@@ -83,7 +83,7 @@ jobs:
   publish:
     needs: [eligibility, validate]
     if: needs.eligibility.outputs.eligible == 'true'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: runpod-4vCPU-ubuntu-2404 # GitHub-hosted, which npm trusted publishing needs
     timeout-minutes: 20
     environment: npm
     permissions:
