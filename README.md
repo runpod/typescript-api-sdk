@@ -8,12 +8,12 @@ The npm package name is unchanged:
 npm install @runpod/typescript-api-sdk
 ```
 
-For the REST v2 client plus the Serverless job client (`run`, `runSync`, `stream`, and more), install [`runpod-sdk`](https://www.npmjs.com/package/runpod-sdk):
+New versions of `@runpod/typescript-api-sdk` release from runpod/js-sdk. Open issues and pull requests there.
+
+For the Serverless job client (`run`, `runSync`, `stream`, and more), install [`runpod-sdk`](https://www.npmjs.com/package/runpod-sdk). It also lives in runpod/js-sdk, at [`packages/runpod-sdk`](https://github.com/runpod/js-sdk/tree/main/packages/runpod-sdk):
 
 ```bash
 npm install runpod-sdk
 ```
 
-Both packages release together from runpod/js-sdk, starting at 2.0.0. Open issues and pull requests there.
-
-The history of this repository stays here for reference. Tags `v0.x` mark the releases published from it.
+The history of this repository stays here for reference. Tags `v0.1.0` to `v0.3.0` mark the releases published from it.
